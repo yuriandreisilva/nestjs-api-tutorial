@@ -1,12 +1,12 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
-import { PrismaService } from "src/prisma/prisma.service";
+import { PrismaService } from "../prisma/prisma.service";
 import { AuthDto } from "./dto";
 import * as argon from 'argon2'
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 
-@Injectable({})
+@Injectable()
 export class AuthService {
     constructor(
         private prisma: PrismaService,
@@ -28,18 +28,8 @@ export class AuthService {
                    email: dto.email,
                    hash
                },
-               // select:{
-               //     id: true,
-               //     email: true,
-               //     createdAt: true
-               // }
            })
-           /*
-           * Return the saved user
-           */  
-           delete user.hash
-        
-           return user
+           return this.singToken(user.id, user.email)
        }catch(error){
             if (error instanceof PrismaClientKnownRequestError){
                 if (error.code === 'P2002'){
@@ -71,14 +61,11 @@ export class AuthService {
         * If password incorrect throw exception
         */
         if (!pwMatches) throw new ForbiddenException('Credentials incorrect')
-        /*
-        * Send back the user
-        */
-        delete user.hash
+        
         return this.singToken(user.id, user.email)
     }
 
-    async singToken(userId: number, email: string): Promise<string> {
+    async singToken(userId: number, email: string): Promise<{ access_token: string }> {
         const payload = { 
             sub: userId,
             email
@@ -86,9 +73,14 @@ export class AuthService {
 
         const secret = this.config.get('JWT_SECRET')
         
-        return this.jwt.signAsync(payload, {
+        const token = await this.jwt.signAsync(payload, {
             expiresIn: '15m',
             secret
         })
+
+        return {
+            access_token: token
+        }
+        
     }
 }
